@@ -1,11 +1,28 @@
 Package: IncucyteFlow
-Title: What the Package Does (One Line, Title Case)
+Title: Convert Incucyte Microscopy Data to FCS Format for Flow Cytometry Analysis
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Benjamin", "Reisman", , "breisma1@jh.edu", role = c("aut", "cre"))
+Description: Provides tools to parse Incucyte platemap XML files, read and 
+    tidy Incucyte object-level CSV data, convert to FCS files compatible 
+    with flow cytometry software, and load into GatingSet objects for 
+    downstream analysis with flowWorkspace and CytoExploreR.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
+Imports: 
+    Biobase,
+    dplyr,
+    flowCore,
+    flowWorkspace,
+    purrr,
+    readr,
+    stringr,
+    tidyr,
+    XML
+Suggests: 
+    CytoExploreR,
+    flowVS,
+    scales
+biocViews:
