@@ -22,4 +22,7 @@ Imports:
     tidyr,
     XML
 Suggests: 
-    CytoExploreR
+    CytoExploreR,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

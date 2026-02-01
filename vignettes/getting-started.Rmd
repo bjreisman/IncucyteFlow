@@ -1,0 +1,334 @@
+---
+title: "Getting Started with IncucyteFlow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with IncucyteFlow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Introduction
+IncucyteFlow converts Incucyte microscopy object-level data into FCS files for analysis with standard flow cytometry tools. This vignette walks through a complete workflow from raw Incucyte exports to gated populations.
+
+## Installation
+
+### Install dependencies
+
+```{r install-deps}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(c("flowCore", "flowWorkspace", "Biobase", "CytoExploreR"))
+```
+
+### Install IncucyteFlow
+
+```{r install-pkg}
+devtools::install_github("bjreisman/IncucyteFlow")
+```
+
+## Workflow Overview
+
+The typical workflow consists of:
+1. **Parse platemap** - Extract experimental metadata from Incucyte `.platemap` XML
+2. **Read data** - Import object-level CSV files exported from Incucyte
+3. **Tidy data** - Parse filenames for timepoints and join platemap metadata
+4. **Convert to FCS** - Create one FCS file per well/timepoint combination
+5. **Load GatingSet** - Import into flowWorkspace for analysis
+6. **Gate and analyze** - Use CytoExploreR for gating and visualization
+
+## Step 1: Load Libraries
+
+```{r setup}
+library(IncucyteFlow)
+library(CytoExploreR)
+```
+
+## Step 2: Parse the Platemap
+
+Incucyte platemap files (`.platemap` or `.PlateMap`) contain experimental metadata including cell types, compounds, concentrations, and growth conditions.
+
+```{r platemap}
+platemap <- read_incucyte_platemap("experiment.PlateMap")
+head(platemap)
+```
+
+The output is a tidy data frame:
+
+| well | Compound | Concentration | ConcentrationUnits | GrowthCondition | CellType |
+|------|----------|---------------|-------------------|-----------------|----------|
+| A01  | DMSO     | 0.1           | %                 | Normoxia        | P493-6   |
+| A02  | Drug1    | 1.0           | uM                | Normoxia        | P493-6   |
+| ...  | ...      | ...           | ...               | ...             | ...      |
+
+## Step 3: Read Incucyte Data
+
+Export object-level data from Incucyte as CSV files. Place all CSV files in a single folder.
+
+**Expected filename format:** `{dye}_{day}_{time}_{suffix}.csv`
+
+Examples:
+- `Phase_d0_0h00_Objects.csv`
+- `GFP_d1_24h00_Objects.csv`
+- `TMRM_d2_48h00_Objects.csv`
+
+```{r read-data}
+mydata <- read_incucyte("path/to/Data")
+```
+```
+## Reading 72 files from path/to/Data
+## Read 1234567 total objects
+```
+
+## Step 4: Tidy the Data
+
+This step:
+- Parses filenames to extract timepoint information
+- Converts day/hour to cumulative hours
+- Creates well IDs from row/column
+- Joins platemap metadata
+
+```{r tidy}
+mydata.tidy <- tidy_incucyte(mydata, platemap)
+```
+
+If any wells have missing platemap data, you'll see a message:
+
+```
+## --------------------------------------------------
+## Note: 2 wells have incomplete platemap data
+## Affected wells: G11, H12
+## Rows affected: 1234 (0.1% of data)
+## --------------------------------------------------
+```
+
+## Step 5: Convert to FCS Files
+
+Create FCS files with one file per well/timepoint combination:
+
+```{r convert-fcs}
+fcs_files <- incucyte_to_fcs(
+  data = mydata.tidy,
+  output_dir = "incucyte_fcs",
+  group_by_cols = c("Wells", "h"),
+  channel_desc = create_channel_desc(
+    FLR1 = "GFP", 
+    FLR2 = "TMRM", 
+    FLR3 = "Sytox"
+  ),
+  fluor_channels = c("FLR1MeanIntensity", "FLR2MeanIntensity", "FLR3MeanIntensity"),
+  filename_prefix = "P493"
+)
+```
+
+```
+## Using channels: Area, Eccentricity, FLR1IntegratedIntensity, FLR1MeanIntensity, ...
+## Using default channel descriptions. Use create_channel_desc() for custom labels.
+## Fluorescence channels: FLR1MeanIntensity, FLR2MeanIntensity, FLR3MeanIntensity
+## Adding identity spillover matrix for 3 fluorescence channels
+## Creating 768 FCS files...
+## Done! Created 768 FCS files in incucyte_fcs
+```
+
+### Channel Descriptions
+
+Use `create_channel_desc()` to map Incucyte channel names to meaningful labels:
+
+```{r channel-desc}
+# Default descriptions
+create_channel_desc()
+
+# Custom descriptions matching your experiment
+create_channel_desc(
+  FLR1 = "GFP",
+  FLR2 = "TMRM",
+  FLR3 = "Sytox Deep Red"
+)
+```
+
+### Available Channels
+
+The following Incucyte measurements are converted to FCS parameters:
+
+| Incucyte Column | Default Description |
+|-----------------|---------------------|
+| Area | Cell Area |
+| Eccentricity | Eccentricity |
+| FLR1IntegratedIntensity | FLR1 Integrated |
+| FLR1MeanIntensity | FLR1 Mean |
+| FLR2IntegratedIntensity | FLR2 Integrated |
+| FLR2MeanIntensity | FLR2 Mean |
+| FLR3IntegratedIntensity | FLR3 Integrated |
+| FLR3MeanIntensity | FLR3 Mean |
+| Texture | Texture |
+
+## Step 6: Load into GatingSet
+
+Load the FCS files into a GatingSet for analysis:
+
+```{r load-gs}
+gs <- load_incucyte_fcs(
+  fcs_dir = "incucyte_fcs", 
+  platemap = platemap, 
+  prefix = "P493"
+)
+```
+
+```
+## Loading 768 FCS files...
+## Created GatingSet with 768 samples
+```
+
+The platemap metadata is automatically added to `pData(gs)`:
+
+```{r pdata}
+head(pData(gs))
+```
+
+| name | Wells | h | Compound | Concentration | CellType |
+|------|-------|---|----------|---------------|----------|
+| P493_A01_0.fcs | A01 | 0 | DMSO | 0.1 | P493-6 |
+| P493_A01_24.fcs | A01 | 24 | DMSO | 0.1 | P493-6 |
+| ... | ... | ... | ... | ... | ... |
+
+## Step 7: Compensation (Optional)
+
+If you have spectral overlap between channels, apply compensation:
+```{r compensate}
+gs_comp <- cyto_compensate(gs, spillover = "Spillover-Matrix.csv")
+```
+
+## Step 8: Transformation
+
+Apply logicle transformation to fluorescence channels:
+
+```{r transform}
+channels <- c("FLR1MeanIntensity", "FLR2MeanIntensity", "FLR3MeanIntensity")
+
+trans <- cyto_transformer_logicle(gs_comp, channels = channels, plot = FALSE)
+gs_trans <- cyto_transform(gs_comp, trans = trans, plot = FALSE)
+```
+
+## Step 9: Gating
+
+Use CytoExploreR's interactive gating:
+
+### Gate cells by size and shape
+
+```{r gate-cells}
+cyto_gate_draw(
+  gs_trans, 
+  parent = "root", 
+  alias = "cells", 
+  channels = c("Area", "Eccentricity"), 
+  gatingTemplate = "gatingTemplate.csv"
+)
+```
+
+### Gate viable cells
+
+```{r gate-viable}
+cyto_gate_draw(
+  gs_trans, 
+  parent = "cells", 
+  alias = "viable", 
+  channels = "FLR3MeanIntensity", 
+  gatingTemplate = "gatingTemplate.csv"
+)
+```
+
+### Edit existing gates
+
+```{r gate-edit}
+cyto_gate_edit(
+  gs_trans, 
+  parent = "cells", 
+  alias = "viable", 
+  channels = "FLR3MeanIntensity", 
+  gatingTemplate = "gatingTemplate.csv"
+)
+```
+
+## Step 10: Visualization and Analysis
+
+### View population statistics
+
+```{r stats}
+cyto_stats_compute(
+  gs_trans,
+  alias = "viable",
+  stat = "freq"
+)
+```
+
+### Plot by condition
+
+```{r plot}
+cyto_plot(
+  gs_trans,
+  parent = "cells",
+  channels = c("FLR1MeanIntensity", "FLR2MeanIntensity"),
+  group_by = "Compound"
+)
+```
+
+## Exporting Platemap Formats
+
+IncucyteFlow can export platemaps to other formats:
+
+### Well-list CSV format
+
+```{r export-welllist}
+write_plater_csv(platemap, "platemap_welllist.csv")
+```
+
+### Plater plate-shaped format
+
+```{r export-plater}
+convert_to_plater_format("platemap_welllist.csv", "platemap_plater.csv")
+```
+
+## Tips and Troubleshooting
+
+### Filename parsing errors
+
+If `tidy_incucyte()` fails, check that your CSV filenames match the expected format:
+`{dye}_{day}_{time}_{suffix}.csv`
+
+The day should be formatted as `d0`, `d1`, etc., and time as `0h00`, `24h00`, etc.
+
+### Missing platemap data
+
+If wells show `NA` for platemap columns, verify:
+1. Well IDs match between data and platemap (e.g., "A01" vs "A1")
+2. All wells in your data have entries in the platemap
+
+### Large datasets
+
+For experiments with many timepoints, consider:
+- Processing subsets of timepoints separately
+- Using `group_by_cols` to create fewer, larger FCS files
+
+```{r fewer-files}
+# One FCS per well (all timepoints combined)
+fcs_files <- incucyte_to_fcs(
+  data = mydata.tidy,
+  output_dir = "fcs_by_well",
+  group_by_cols = "Wells",
+  filename_prefix = "P493"
+)
+```
+
+## Session Info
+
+```{r session-info, eval = TRUE}
+sessionInfo()
+```
