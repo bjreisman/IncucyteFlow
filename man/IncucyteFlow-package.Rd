@@ -9,7 +9,7 @@
 Provides tools to parse Incucyte platemap XML files, read and tidy Incucyte object-level CSV data, convert to FCS files compatible with flow cytometry software, and load into GatingSet objects for downstream analysis with flowWorkspace and CytoExploreR.
 }
 \author{
-\strong{Maintainer}: Benjamin Reisman \email{breisma1@jh.edu}
+\strong{Maintainer}: Brian Reismann \email{breisma1@jh.edu.com}
 
 }
 \keyword{internal}

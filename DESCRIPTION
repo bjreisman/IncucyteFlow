@@ -2,7 +2,7 @@ Package: IncucyteFlow
 Title: Convert Incucyte Microscopy Data to FCS Format for Flow Cytometry Analysis
 Version: 0.0.0.9000
 Authors@R: 
-    person("Benjamin", "Reisman", , "breisma1@jh.edu", role = c("aut", "cre"))
+    person("Brian", "Reismann", , "breisma1@jh.edu.com", role = c("aut", "cre"))
 Description: Provides tools to parse Incucyte platemap XML files, read and 
     tidy Incucyte object-level CSV data, convert to FCS files compatible 
     with flow cytometry software, and load into GatingSet objects for 
@@ -22,7 +22,4 @@ Imports:
     tidyr,
     XML
 Suggests: 
-    CytoExploreR,
-    flowVS,
-    scales
-biocViews:
+    CytoExploreR
